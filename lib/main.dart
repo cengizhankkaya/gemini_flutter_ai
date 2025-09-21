@@ -20,6 +20,67 @@ class ChatMessage {
   });
 }
 
+// Hikaye bileşenleri modelleri
+class StoryCharacter {
+  final String name;
+  final String description;
+  final String personality;
+  final String background;
+
+  StoryCharacter({
+    required this.name,
+    required this.description,
+    required this.personality,
+    required this.background,
+  });
+}
+
+class StorySetting {
+  final String location;
+  final String time;
+  final String atmosphere;
+  final String description;
+
+  StorySetting({
+    required this.location,
+    required this.time,
+    required this.atmosphere,
+    required this.description,
+  });
+}
+
+class StoryEvent {
+  final String title;
+  final String description;
+  final String conflict;
+  final String resolution;
+
+  StoryEvent({
+    required this.title,
+    required this.description,
+    required this.conflict,
+    required this.resolution,
+  });
+}
+
+class GeneratedStory {
+  final String title;
+  final String content;
+  final StoryCharacter character;
+  final StorySetting setting;
+  final StoryEvent event;
+  final DateTime createdAt;
+
+  GeneratedStory({
+    required this.title,
+    required this.content,
+    required this.character,
+    required this.setting,
+    required this.event,
+    required this.createdAt,
+  });
+}
+
 void main() {
   runApp(const MyApp());
 }
@@ -30,22 +91,21 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Gemini Flutter Demo',
+      title: 'Anime Hikaye Oluşturucu',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
       ),
-      home: const GeminiPage(title: 'Gemini Demo'),
+      home: const StoryCreatorPage(),
     );
   }
 }
 
-class GeminiPage extends StatefulWidget {
-  const GeminiPage({super.key, required this.title});
-
-  final String title;
+class StoryCreatorPage extends StatefulWidget {
+  const StoryCreatorPage({super.key});
 
   @override
-  State<GeminiPage> createState() => _GeminiPageState();
+  State<StoryCreatorPage> createState() => _StoryCreatorPageState();
 }
 
 class _MyHomeKeyStorage {
@@ -72,15 +132,19 @@ class _MyHomeRemoteConfig {
   }
 }
 
-class _GeminiPageState extends State<GeminiPage> {
-  final TextEditingController _controller = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-
+class _StoryCreatorPageState extends State<StoryCreatorPage> {
   final _storage = _MyHomeKeyStorage();
 
-  List<ChatMessage> _messages = [];
-  bool _isLoading = false;
+  // Hikaye bileşenleri
+  StoryCharacter? _selectedCharacter;
+  StorySetting? _selectedSetting;
+  StoryEvent? _selectedEvent;
+  
+  // UI durumu
+  bool _isGenerating = false;
   int _retryAttempt = 0;
+  GeneratedStory? _generatedStory;
+  List<GeneratedStory> _savedStories = [];
 
   // Derleme zamanı ortam değişkenleri (opsiyonel):
   // flutter run --dart-define=GEMINI_API_KEY=... [--dart-define=GEMINI_KEY_URL=https://...]
@@ -125,22 +189,13 @@ class _GeminiPageState extends State<GeminiPage> {
       setState(() {
         _keyLoaded = true;
       });
-      // Hata mesajını chat'e ekle
-      final errorMessage = ChatMessage(
-        content: 'Anahtar yüklenirken hata: $e',
-        isUser: false,
-        timestamp: DateTime.now(),
-      );
-      setState(() {
-        _messages.add(errorMessage);
-      });
+      // Hata mesajını göster
+      _showSnackBar('Anahtar yüklenirken hata: $e');
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -188,73 +243,79 @@ class _GeminiPageState extends State<GeminiPage> {
     }
   }
 
-  Future<void> _sendPrompt() async {
-    final prompt = _controller.text.trim();
-    if (prompt.isEmpty) return;
-
-    if ((_apiKey ?? '').isEmpty) {
-      // API anahtarı hatası için hata mesajı ekle
-      final errorMessage = ChatMessage(
-        content: 'API anahtarı bulunamadı. Lütfen anahtar girin.',
-        isUser: false,
-        timestamp: DateTime.now(),
-      );
-      setState(() {
-        _messages.add(errorMessage);
-      });
+  // Hikaye oluşturma fonksiyonu
+  Future<void> _generateStory() async {
+    if (_selectedCharacter == null || _selectedSetting == null || _selectedEvent == null) {
+      _showSnackBar('Lütfen tüm hikaye bileşenlerini seçin!');
       return;
     }
 
-    // Kullanıcı mesajını ekle
-    final userMessage = ChatMessage(
-      content: prompt,
-      isUser: true,
-      timestamp: DateTime.now(),
-    );
-
-    // Loading mesajını ekle
-    final loadingMessage = ChatMessage(
-      content: '',
-      isUser: false,
-      timestamp: DateTime.now(),
-      isLoading: true,
-    );
+    if ((_apiKey ?? '').isEmpty) {
+      _showSnackBar('API anahtarı bulunamadı. Lütfen anahtar girin.');
+      return;
+    }
 
     setState(() {
-      _messages.add(userMessage);
-      _messages.add(loadingMessage);
-      _isLoading = true;
+      _isGenerating = true;
       _retryAttempt = 0;
     });
 
-    _controller.clear();
-    _scrollToBottom();
-
     try {
-      final response = await _retryWithBackoff(() async {
+      final storyContent = await _retryWithBackoff(() async {
         final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey!);
-        final content = [
-          Content.text(prompt),
-        ];
+        
+        final prompt = '''
+Aşağıdaki bileşenleri kullanarak anime tarzında yaratıcı ve ilginç bir hikaye yaz:
+
+KARAKTER:
+- İsim: ${_selectedCharacter!.name}
+- Açıklama: ${_selectedCharacter!.description}
+- Kişilik: ${_selectedCharacter!.personality}
+- Geçmiş: ${_selectedCharacter!.background}
+
+MEKAN VE ZAMAN:
+- Konum: ${_selectedSetting!.location}
+- Zaman: ${_selectedSetting!.time}
+- Atmosfer: ${_selectedSetting!.atmosphere}
+- Açıklama: ${_selectedSetting!.description}
+
+OLAY:
+- Başlık: ${_selectedEvent!.title}
+- Açıklama: ${_selectedEvent!.description}
+- Çatışma: ${_selectedEvent!.conflict}
+- Çözüm: ${_selectedEvent!.resolution}
+
+Lütfen bu bileşenleri kullanarak anime tarzında 500-800 kelimelik, akıcı ve ilginç bir hikaye yaz. Hikayeyi anime/manga tarzında yaz:
+
+- Karakterin iç dünyasını ve duygularını detaylı anlat
+- Anime tarzı diyaloglar kullan (daha duygusal ve ifadeli)
+- Güç seviyeleri, büyüler, teknoloji gibi anime öğelerini dahil et
+- Gerilimli sahneleri anime tarzında betimle
+- Karakterin gelişimini ve büyümesini göster
+- Paragraflar halinde düzenle ve anime atmosferini yansıt
+
+Hikayeyi anime izleyicilerinin seveceği tarzda yaz!
+''';
+
+        final content = [Content.text(prompt)];
         return await model.generateContent(content);
       });
 
-      final text = response.text;
-      
+      final story = GeneratedStory(
+        title: '${_selectedCharacter!.name} - ${_selectedEvent!.title}',
+        content: storyContent.text ?? 'Hikaye oluşturulamadı.',
+        character: _selectedCharacter!,
+        setting: _selectedSetting!,
+        event: _selectedEvent!,
+        createdAt: DateTime.now(),
+      );
+
       setState(() {
-        // Loading mesajını kaldır ve gerçek yanıtı ekle
-        _messages.removeLast(); // Loading mesajını kaldır
-        final aiMessage = ChatMessage(
-          content: text?.trim().isEmpty == true ? '(Boş yanıt)' : text!,
-          isUser: false,
-          timestamp: DateTime.now(),
-        );
-        _messages.add(aiMessage);
+        _generatedStory = story;
       });
     } catch (e) {
       String errorMessage = 'Hata: $e';
       
-      // Hata tipine göre daha açıklayıcı mesajlar
       final errorString = e.toString().toLowerCase();
       if (errorString.contains('503')) {
         errorMessage = 'Sunucu geçici olarak kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
@@ -266,141 +327,298 @@ class _GeminiPageState extends State<GeminiPage> {
         errorMessage = 'İnternet bağlantısı sorunu. Bağlantınızı kontrol edin.';
       }
       
-      setState(() {
-        // Loading mesajını kaldır ve hata mesajını ekle
-        _messages.removeLast(); // Loading mesajını kaldır
-        final errorChatMessage = ChatMessage(
-          content: errorMessage,
-          isUser: false,
-          timestamp: DateTime.now(),
-        );
-        _messages.add(errorChatMessage);
-      });
+      _showSnackBar(errorMessage);
     } finally {
       setState(() {
-        _isLoading = false;
+        _isGenerating = false;
       });
-      _scrollToBottom();
     }
   }
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
-  Widget _buildMessageBubble(ChatMessage message) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-      child: Row(
-        mainAxisAlignment: message.isUser 
-            ? MainAxisAlignment.end 
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!message.isUser) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.blue.shade100,
-              child: Icon(
-                Icons.smart_toy,
-                size: 18,
-                color: Colors.blue.shade700,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: message.isUser 
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.grey.shade100,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(18),
-                  topRight: const Radius.circular(18),
-                  bottomLeft: Radius.circular(message.isUser ? 18 : 4),
-                  bottomRight: Radius.circular(message.isUser ? 4 : 18),
+  // Hikaye bileşenleri seçim widget'ları
+  Widget _buildCharacterSelector() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.person, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Karakter Seç',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-                border: message.isUser 
-                    ? null 
-                    : Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_selectedCharacter == null)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  if (message.isLoading)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.grey.shade600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Yanıt yazılıyor...',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 14,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    SelectableText(
-                      message.content,
-                      style: TextStyle(
-                        color: message.isUser 
-                            ? Colors.white 
-                            : Colors.black87,
-                        fontSize: 16,
-                      ),
-                    ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('HH:mm').format(message.timestamp),
-                    style: TextStyle(
-                      color: message.isUser 
-                          ? Colors.white70 
-                          : Colors.grey.shade600,
-                      fontSize: 11,
-                    ),
-                  ),
+                  _buildCharacterOption('Kaito', 'Genç bir ninja', 'Cesur ve sadık', 'Gizli ninja köyünden gelen yetenekli savaşçı'),
+                  _buildCharacterOption('Sakura', 'Büyücü kız', 'Güçlü ve kararlı', 'Büyülü güçleri olan genç büyücü'),
+                  _buildCharacterOption('Ren', 'Mek pilotu', 'Analitik ve soğukkanlı', 'Dev robotları kontrol eden pilot'),
+                  _buildCharacterOption('Yuki', 'Okul kızı', 'Tatlı ve meraklı', 'Normal lise öğrencisi ama özel güçleri var'),
+                  _buildCharacterOption('Hiro', 'Samuray', 'Onurlu ve güçlü', 'Eski samuray ailesinden gelen savaşçı'),
+                  _buildCharacterOption('Mira', 'Kedi kız', 'Şirin ve çevik', 'Kedi özellikleri olan nekomimi karakter'),
                 ],
+              )
+            else
+              _buildSelectedComponent(
+                _selectedCharacter!.name,
+                '${_selectedCharacter!.description}\n${_selectedCharacter!.personality}',
+                () => setState(() => _selectedCharacter = null),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCharacterOption(String name, String description, String personality, String background) {
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedCharacter = StoryCharacter(
+            name: name,
+            description: description,
+            personality: personality,
+            background: background,
+          );
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingSelector() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Mekan ve Zaman Seç',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_selectedSetting == null)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildSettingOption('Tokyo, 2024', 'Modern şehir', 'Neon ışıkları ve teknoloji', 'Yüksek binalar arasında gizli dünyalar'),
+                  _buildSettingOption('Akademi, Günümüz', 'Büyülü okul', 'Sihirli ve gizemli', 'Büyücülerin eğitim gördüğü prestijli akademi'),
+                  _buildSettingOption('Ninja Köyü, Feodal', 'Gizli köy', 'Geleneksel ve tehlikeli', 'Dağların arasında gizli ninja yerleşimi'),
+                  _buildSettingOption('Uzay İstasyonu, 2150', 'Gelecek', 'Teknolojik ve soğuk', 'Yıldızlar arasında dolaşan dev uzay gemisi'),
+                  _buildSettingOption('Fantastik Orman, Efsanevi', 'Büyülü orman', 'Mistik ve büyülü', 'Periler ve ejderhaların yaşadığı orman'),
+                  _buildSettingOption('Lise, Günümüz', 'Normal okul', 'Sıradan görünümlü', 'Gizli güçlerin saklandığı normal lise'),
+                ],
+              )
+            else
+              _buildSelectedComponent(
+                '${_selectedSetting!.location} - ${_selectedSetting!.time}',
+                '${_selectedSetting!.atmosphere}\n${_selectedSetting!.description}',
+                () => setState(() => _selectedSetting = null),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingOption(String locationTime, String atmosphere, String description, String detail) {
+    return InkWell(
+      onTap: () {
+        final parts = locationTime.split(', ');
+        setState(() {
+          _selectedSetting = StorySetting(
+            location: parts[0],
+            time: parts[1],
+            atmosphere: atmosphere,
+            description: '$description - $detail',
+          );
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              locationTime,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              atmosphere,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventSelector() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.event, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Olay Seç',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_selectedEvent == null)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildEventOption('Güç Keşfi', 'Gizli güçler ortaya çıkar', 'Bu güçler nereden geliyor?', 'Yeni yetenekler keşfedilir'),
+                  _buildEventOption('Aşk Hikayesi', 'İlk aşk yaşanır', 'Aşk gerçek mi yoksa büyü mü?', 'Kalp kırıklığı veya mutlu son'),
+                  _buildEventOption('Büyük Savaş', 'Epik bir savaş başlar', 'Kim kazanacak?', 'Kahramanlık ve fedakarlık'),
+                  _buildEventOption('Zaman Yolculuğu', 'Geçmişe veya geleceğe gidilir', 'Zaman çizgisi değişebilir mi?', 'Kader değişir'),
+                  _buildEventOption('Mek Savaşı', 'Dev robotlar savaşır', 'Hangi mek daha güçlü?', 'Pilotluk yetenekleri test edilir'),
+                  _buildEventOption('Büyülü Macera', 'Büyülü dünyada keşif', 'Hangi büyüler keşfedilecek?', 'Büyücü olma yolculuğu'),
+                ],
+              )
+            else
+              _buildSelectedComponent(
+                _selectedEvent!.title,
+                '${_selectedEvent!.description}\nÇatışma: ${_selectedEvent!.conflict}',
+                () => setState(() => _selectedEvent = null),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventOption(String title, String description, String conflict, String resolution) {
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedEvent = StoryEvent(
+            title: title,
+            description: description,
+            conflict: conflict,
+            resolution: resolution,
+          );
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectedComponent(String title, String description, VoidCallback onRemove) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).colorScheme.primary),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.7),
+                  ),
+                ),
+              ],
             ),
           ),
-          if (message.isUser) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Theme.of(context).colorScheme.secondary,
-              child: Icon(
-                Icons.person,
-                size: 18,
-                color: Colors.white,
-              ),
+          IconButton(
+            onPressed: onRemove,
+            icon: Icon(
+              Icons.close,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -462,7 +680,7 @@ class _GeminiPageState extends State<GeminiPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
+        title: const Text('Anime Hikaye Oluşturucu'),
         actions: [
           IconButton(
             tooltip: 'API anahtarı yönet',
@@ -522,101 +740,245 @@ class _GeminiPageState extends State<GeminiPage> {
               ),
             ),
 
-          // Chat mesajları
+          // Ana içerik
           Expanded(
-            child: _messages.isEmpty
-                ? Center(
+            child: _generatedStory == null
+                ? SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Gemini ile sohbet etmeye başlayın!',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: Colors.grey.shade600,
+                        // Başlık
+                        Center(
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.auto_stories,
+                                size: 64,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Anime Hikaye Oluşturucu',
+                                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Anime karakterleri, mekanları ve olayları seçerek epik anime hikayeleri oluşturun!',
+                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: Colors.grey.shade600,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Aşağıdan bir mesaj yazın ve gönder butonuna basın.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey.shade500,
+                        const SizedBox(height: 32),
+
+                        // Hikaye bileşenleri
+                        _buildCharacterSelector(),
+                        const SizedBox(height: 16),
+                        _buildSettingSelector(),
+                        const SizedBox(height: 16),
+                        _buildEventSelector(),
+                        const SizedBox(height: 24),
+
+                        // Hikaye oluştur butonu
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _isGenerating || _selectedCharacter == null || _selectedSetting == null || _selectedEvent == null
+                                ? null
+                                : _generateStory,
+                            icon: _isGenerating
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.auto_stories),
+                            label: Text(_isGenerating ? 'Hikaye Oluşturuluyor...' : 'Hikaye Oluştur'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              textStyle: const TextStyle(fontSize: 18),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.only(top: 8, bottom: 8),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      return _buildMessageBubble(_messages[index]);
-                    },
-                  ),
+                : _buildStoryDisplay(),
           ),
+        ],
+      ),
+    );
+  }
 
-          // Input alanı
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border(
-                top: BorderSide(color: Colors.grey.shade300),
-              ),
-            ),
-            child: SafeArea(
-              child: Row(
+  Widget _buildStoryDisplay() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Hikaye başlığı
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      textInputAction: TextInputAction.send,
-                      minLines: 1,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: 'Mesajınızı yazın...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
+                  Row(
+                    children: [
+                      Icon(Icons.auto_stories, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _generatedStory!.title,
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
                       ),
-                      onSubmitted: (_) => _isLoading ? null : _sendPrompt(),
-                    ),
+                      IconButton(
+                        onPressed: () => setState(() => _generatedStory = null),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  CircleAvatar(
-                    backgroundColor: _isLoading 
-                        ? Colors.grey.shade300 
-                        : Theme.of(context).colorScheme.primary,
-                    child: IconButton(
-                      icon: _isLoading
-                          ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.grey.shade600,
-                                ),
-                              ),
-                            )
-                          : const Icon(Icons.send, color: Colors.white),
-                      onPressed: _isLoading ? null : _sendPrompt,
+                  const SizedBox(height: 8),
+                  Text(
+                    DateFormat('dd MMMM yyyy, HH:mm').format(_generatedStory!.createdAt),
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12,
                     ),
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Hikaye içeriği
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hikaye',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SelectableText(
+                    _generatedStory!.content,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      height: 1.6,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Hikaye bileşenleri özeti
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hikaye Bileşenleri',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildStoryComponentSummary('Karakter', _generatedStory!.character.name, _generatedStory!.character.description),
+                  const SizedBox(height: 8),
+                  _buildStoryComponentSummary('Mekan', _generatedStory!.setting.location, _generatedStory!.setting.atmosphere),
+                  const SizedBox(height: 8),
+                  _buildStoryComponentSummary('Olay', _generatedStory!.event.title, _generatedStory!.event.description),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Aksiyon butonları
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _savedStories.add(_generatedStory!);
+                      _generatedStory = null;
+                    });
+                    _showSnackBar('Hikaye kaydedildi!');
+                  },
+                  icon: const Icon(Icons.save),
+                  label: const Text('Kaydet'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _generatedStory = null;
+                    });
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Yeni Hikaye'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoryComponentSummary(String title, String name, String description) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            name,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            description,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
             ),
           ),
         ],
