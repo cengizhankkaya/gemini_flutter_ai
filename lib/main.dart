@@ -265,7 +265,7 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
         final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey!);
         
         final prompt = '''
-Aşağıdaki bileşenleri kullanarak anime tarzında yaratıcı ve ilginç bir hikaye yaz:
+Aşağıdaki bileşenleri kullanarak ANIME/MANGA tarzında, BÖLÜM BÖLÜM ve kitap gibi uzun bir hikaye yaz.
 
 KARAKTER:
 - İsim: ${_selectedCharacter!.name}
@@ -285,16 +285,21 @@ OLAY:
 - Çatışma: ${_selectedEvent!.conflict}
 - Çözüm: ${_selectedEvent!.resolution}
 
-Lütfen bu bileşenleri kullanarak anime tarzında 500-800 kelimelik, akıcı ve ilginç bir hikaye yaz. Hikayeyi anime/manga tarzında yaz:
+Format ve uzunluk kuralları (zorunlu):
+- En az 6 bölüm, tercihen 6-10 bölüm yaz.
+- Her bölüm 3-6 paragraf ve yaklaşık 200-400 kelime olsun.
+- Her bölüm başlığı şu biçimde olsun: "Bölüm N — Kısa Başlık" (N: 1,2,3...).
+- Bölümler arası süreklilik ve karakter gelişimi korunsun.
+- Bölüm sonları, final hariç, hafif bir cliffhanger ile bitsin.
+- Son bölümde ana çatışma tatmin edici şekilde çözülsün ve kısa bir epilog ekle.
 
-- Karakterin iç dünyasını ve duygularını detaylı anlat
-- Anime tarzı diyaloglar kullan (daha duygusal ve ifadeli)
-- Güç seviyeleri, büyüler, teknoloji gibi anime öğelerini dahil et
-- Gerilimli sahneleri anime tarzında betimle
-- Karakterin gelişimini ve büyümesini göster
-- Paragraflar halinde düzenle ve anime atmosferini yansıt
+Anlatım yönergeleri:
+- Animeye özgü duygusal ve ifadeli diyaloglar kullan.
+- Güç seviyeleri, büyüler veya ileri teknoloji gibi anime öğelerini dahil et (temaya uygun).
+- Aksiyon sahnelerini dinamik, duygusal sahneleri içsel monologlarla betimle.
+- Betimlemelerde ritmi koru; fazlalıklardan kaçın.
 
-Hikayeyi anime izleyicilerinin seveceği tarzda yaz!
+Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma.
 ''';
 
         final content = [Content.text(prompt)];
