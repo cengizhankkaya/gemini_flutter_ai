@@ -148,7 +148,7 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
 
   // Derleme zamanı ortam değişkenleri (opsiyonel):
   // flutter run --dart-define=GEMINI_API_KEY=... [--dart-define=GEMINI_KEY_URL=https://...]
-  static const String _envApiKey = String.fromEnvironment('AIzaSyANxj_oAuwxz9I2pEuFRVPTmypJhSnUYk8');
+  static const String _envApiKey = String.fromEnvironment('GEMINI_API_KEY');
 
   String? _apiKey; // Çalışma zamanında kullanılacak anahtar
   bool _keyLoaded = false;
@@ -161,14 +161,18 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
 
   Future<void> _initApiKey() async {
     try {
+      print('API anahtarı yükleniyor...');
+      
       // 1) Öncelik: Secure Storage
       String? key = await _storage.readKey();
+      print('Secure Storage\'dan anahtar: ${key != null ? "Mevcut (${key.length} karakter)" : "Bulunamadı"}');
 
       // 2) Yoksa: Derleme zamanı GEMINI_API_KEY
       if (key == null || key.isEmpty) {
         if (_envApiKey.isNotEmpty) {
           key = _envApiKey;
           await _storage.writeKey(key);
+          print('Derleme zamanı anahtarı kullanıldı: ${key.length} karakter');
         }
       }
 
@@ -178,6 +182,7 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
         if (remoteKey != null && remoteKey.isNotEmpty) {
           key = remoteKey;
           await _storage.writeKey(key);
+          print('Uzaktan anahtar alındı: ${key.length} karakter');
         }
       }
 
@@ -185,7 +190,10 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
         _apiKey = key;
         _keyLoaded = true;
       });
+      
+      print('API anahtarı yükleme tamamlandı: ${key != null ? "Başarılı" : "Başarısız"}');
     } catch (e) {
+      print('API anahtarı yükleme hatası: $e');
       setState(() {
         _keyLoaded = true;
       });
@@ -261,7 +269,13 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
     });
 
     try {
+      print('Hikaye oluşturma başlıyor...');
+      print('Seçili karakter: ${_selectedCharacter!.name}');
+      print('Seçili mekan: ${_selectedSetting!.location}');
+      print('Seçili olay: ${_selectedEvent!.title}');
+      
       final storyContent = await _retryWithBackoff(() async {
+        print('Gemini API\'ye istek gönderiliyor...');
         final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey!);
         
         final prompt = '''
@@ -286,24 +300,32 @@ OLAY:
 - Çözüm: ${_selectedEvent!.resolution}
 
 Format ve uzunluk kuralları (zorunlu):
-- En az 6 bölüm, tercihen 6-10 bölüm yaz.
-- Her bölüm 3-6 paragraf ve yaklaşık 200-400 kelime olsun.
+- En az 10 bölüm, tercihen 12-15 bölüm yaz.
+- Her bölüm 5-8 paragraf ve yaklaşık 600-1000 kelime olsun.
 - Her bölüm başlığı şu biçimde olsun: "Bölüm N — Kısa Başlık" (N: 1,2,3...).
 - Bölümler arası süreklilik ve karakter gelişimi korunsun.
 - Bölüm sonları, final hariç, hafif bir cliffhanger ile bitsin.
 - Son bölümde ana çatışma tatmin edici şekilde çözülsün ve kısa bir epilog ekle.
+- Her bölümde detaylı diyaloglar, karakter monologları ve aksiyon sahneleri olsun.
 
 Anlatım yönergeleri:
 - Animeye özgü duygusal ve ifadeli diyaloglar kullan.
 - Güç seviyeleri, büyüler veya ileri teknoloji gibi anime öğelerini dahil et (temaya uygun).
 - Aksiyon sahnelerini dinamik, duygusal sahneleri içsel monologlarla betimle.
-- Betimlemelerde ritmi koru; fazlalıklardan kaçın.
+- Her bölümde karakter gelişimi ve hikaye ilerlemesi olsun.
+- Yan karakterler ekleyerek hikayeyi zenginleştir.
+- Detaylı çevre betimlemeleri ve atmosfer yarat.
+- Karakterlerin duygusal yolculuklarını derinlemesine işle.
+- Her bölümde yeni bir olay veya keşif ekle.
+- Uzun diyaloglar ve karakter etkileşimleri kullan.
 
 Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma.
 ''';
 
         final content = [Content.text(prompt)];
-        return await model.generateContent(content);
+        final response = await model.generateContent(content);
+        print('API yanıtı alındı: ${response.text?.length ?? 0} karakter');
+        return response;
       });
 
       final story = GeneratedStory(
@@ -315,11 +337,18 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
         createdAt: DateTime.now(),
       );
 
+      print('Hikaye başarıyla oluşturuldu: ${story.title}');
+      print('Hikaye içeriği: ${story.content.length} karakter');
+
       setState(() {
         _generatedStory = story;
       });
     } catch (e) {
       String errorMessage = 'Hata: $e';
+      
+      // Debug bilgisi için konsola yazdır
+      print('Hikaye oluşturma hatası: $e');
+      print('API Key durumu: ${_apiKey != null ? "Mevcut (${_apiKey!.length} karakter)" : "Bulunamadı"}');
       
       final errorString = e.toString().toLowerCase();
       if (errorString.contains('503')) {
@@ -330,6 +359,10 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
         errorMessage = 'API anahtarı geçersiz. Lütfen anahtarınızı kontrol edin.';
       } else if (errorString.contains('network') || errorString.contains('connection')) {
         errorMessage = 'İnternet bağlantısı sorunu. Bağlantınızı kontrol edin.';
+      } else if (errorString.contains('timeout')) {
+        errorMessage = 'İstek zaman aşımına uğradı. Lütfen tekrar deneyin.';
+      } else if (errorString.contains('quota') || errorString.contains('limit')) {
+        errorMessage = 'API kotası aşıldı. Lütfen daha sonra tekrar deneyin.';
       }
       
       _showSnackBar(errorMessage);
@@ -771,7 +804,7 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Anime karakterleri, mekanları ve olayları seçerek epik anime hikayeleri oluşturun!',
+                                'Anime karakterleri, mekanları ve olayları seçerek uzun ve detaylı anime hikayeleri oluşturun!',
                                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                   color: Colors.grey.shade600,
                                 ),
@@ -804,7 +837,7 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
                                     child: CircularProgressIndicator(strokeWidth: 2),
                                   )
                                 : const Icon(Icons.auto_stories),
-                            label: Text(_isGenerating ? 'Hikaye Oluşturuluyor...' : 'Hikaye Oluştur'),
+                            label: Text(_isGenerating ? 'Uzun Hikaye Oluşturuluyor...' : 'Uzun Hikaye Oluştur'),
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               textStyle: const TextStyle(fontSize: 18),
