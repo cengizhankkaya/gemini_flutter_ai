@@ -954,6 +954,20 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
           Row(
             children: [
               Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StoryReaderPage(story: _generatedStory!),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.menu_book),
+                  label: const Text('Kitap Gibi Oku'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () {
                     setState(() {
@@ -1020,6 +1034,191 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _Chapter {
+  final String title;
+  final String content;
+
+  const _Chapter({required this.title, required this.content});
+}
+
+class StoryReaderPage extends StatefulWidget {
+  final GeneratedStory story;
+
+  const StoryReaderPage({super.key, required this.story});
+
+  @override
+  State<StoryReaderPage> createState() => _StoryReaderPageState();
+}
+
+class _StoryReaderPageState extends State<StoryReaderPage> {
+  late final PageController _pageController;
+  late final List<_Chapter> _chapters;
+  int _currentPage = 0;
+  double _fontSize = 18;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _chapters = _parseChapters(widget.story.content);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  List<_Chapter> _parseChapters(String content) {
+    final lines = content.split('\n');
+    final RegExp heading = RegExp(r'^Bölüm\s+\d+\s+—');
+
+    final List<_Chapter> chapters = [];
+    String? currentTitle;
+    final StringBuffer buffer = StringBuffer();
+
+    void pushChapter() {
+      if (currentTitle != null) {
+        chapters.add(_Chapter(title: currentTitle, content: buffer.toString().trim()));
+      }
+      buffer.clear();
+    }
+
+    for (final line in lines) {
+      if (heading.hasMatch(line.trim())) {
+        pushChapter();
+        currentTitle = line.trim();
+      } else {
+        buffer.writeln(line);
+      }
+    }
+    // push last
+    if (currentTitle == null) {
+      // Başlık bulunamadıysa tek bölüm olarak ele al
+      return [
+        _Chapter(title: widget.story.title, content: content.trim()),
+      ];
+    }
+    pushChapter();
+    return chapters;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color paper = const Color(0xFFF8F5E7);
+    final Color ink = const Color(0xFF2B2B2B);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.story.title),
+        actions: [
+          IconButton(
+            tooltip: 'Yazı boyutu küçült',
+            onPressed: () {
+              setState(() {
+                _fontSize = (_fontSize - 2).clamp(14, 28);
+              });
+            },
+            icon: const Icon(Icons.text_decrease),
+          ),
+          IconButton(
+            tooltip: 'Yazı boyutu büyüt',
+            onPressed: () {
+              setState(() {
+                _fontSize = (_fontSize + 2).clamp(14, 28);
+              });
+            },
+            icon: const Icon(Icons.text_increase),
+          ),
+        ],
+      ),
+      body: Container(
+        color: paper,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              onPageChanged: (i) => setState(() => _currentPage = i),
+              itemCount: _chapters.length,
+              itemBuilder: (context, index) {
+                final chapter = _chapters[index];
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 18,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  chapter.title,
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: ink,
+                                      ),
+                                ),
+                                const SizedBox(height: 12),
+                                Divider(color: Colors.grey.shade300, height: 24),
+                                const SizedBox(height: 4),
+                                Text(
+                                  chapter.content,
+                                  textAlign: TextAlign.justify,
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                        fontSize: _fontSize,
+                                        height: 1.7,
+                                        color: ink,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 12,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Bölüm ${_currentPage + 1}/${_chapters.length}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
