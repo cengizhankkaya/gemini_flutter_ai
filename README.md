@@ -1,17 +1,38 @@
-# gemini_flutter_ai
+# Anime Hikaye Oluşturucu
 
-Google Gemini (Generative AI) API ile etkileşime geçen, çok platformlu (iOS/Android/Web/Windows/macOS/Linux) bir Flutter örnek uygulaması.
+Google Gemini AI ile anime karakterleri, mekanları ve olayları seçerek uzun ve detaylı anime hikayeleri oluşturan çok platformlu Flutter uygulaması.
 
-Uygulama, API anahtarını güvenle yönetmek için birden fazla yöntem sunar ve `google_generative_ai` paketi ile metin üretimi yapar.
+Bu uygulama, kullanıcıların anime tarzında hikayeler oluşturmasını sağlar. Karakter, mekan ve olay seçimleri yaparak Gemini AI'ın gücüyle kişiselleştirilmiş hikayeler üretir.
 
 ## Özellikler
 
-- Google Gemini modeli ile metin üretimi (varsayılan: `gemini-1.5-flash`)
-- API anahtarı yönetimi için 3 yöntem:
-  1) Uygulama içinden anahtar girip kalıcı olarak saklama (`flutter_secure_storage`)
+### 🎭 Karakter Seçimi
+- 6 farklı anime karakteri (Ninja, Büyücü, Mek Pilotu, Okul Kızı, Samuray, Kedi Kız)
+- Her karakterin kendine özgü kişiliği ve geçmişi
+- Detaylı karakter açıklamaları
+
+### 🌍 Mekan ve Zaman Seçimi
+- 6 farklı mekan ve zaman kombinasyonu
+- Modern Tokyo'dan fantastik ormanlara kadar çeşitli ortamlar
+- Her mekanın kendine özgü atmosferi ve detayları
+
+### ⚔️ Olay Seçimi
+- 6 farklı hikaye türü (Güç Keşfi, Aşk Hikayesi, Büyük Savaş, Zaman Yolculuğu, Mek Savaşı, Büyülü Macera)
+- Her olayın kendine özgü çatışması ve çözümü
+- Epik hikaye anlatımı
+
+### 📖 Hikaye Okuma Deneyimi
+- Kitap benzeri okuma arayüzü
+- Bölüm bölüm hikaye okuma
+- Yazı boyutu ayarlama
+- Sayfa geçiş göstergesi
+
+### 🔐 API Anahtarı Yönetimi
+- 3 farklı yöntemle API anahtarı yönetimi:
+  1) Uygulama içinden anahtar girip güvenli saklama (`flutter_secure_storage`)
   2) Derleme zamanında `--dart-define=GEMINI_API_KEY=...` ile verme
   3) Derleme zamanında anahtarı bir URL'den çekme: `--dart-define=GEMINI_KEY_URL=https://...`
-- Anahtarın varlığını/uzunluğunu izleme, hata/kota yönetimi için temel uyarılar
+- Anahtar durumu izleme ve hata yönetimi
 
 ## Gereksinimler
 
@@ -52,35 +73,95 @@ Uygulama bu URL’e GET isteği yapar ve dönen gövdeyi (response body) API ana
 
 Not: Aynı anda hem `GEMINI_API_KEY` hem `GEMINI_KEY_URL` verilirse öncelik mantığı `lib/main.dart` içindeki yükleme sırasına göre belirlenir.
 
-## Paketler
+## Teknik Detaylar
 
-- `google_generative_ai` (^0.4.6): Gemini API istemcisi
+### Mimari
+- **Clean Architecture** prensiplerine uygun katmanlı yapı
+- **Dependency Injection** ile `get_it` kullanımı
+- **Provider** ile state management
+- **Repository Pattern** ile veri katmanı yönetimi
+
+### Kullanılan Paketler
+- `google_generative_ai` (^0.4.7): Gemini API istemcisi
 - `flutter_secure_storage` (^9.2.2): API anahtarını güvenli saklama
-- `path_provider`: Platforma özel güvenli depolama/klasör erişimi için yardımcı paketler
+- `get_it` (^7.7.0): Dependency injection
+- `provider` (^6.1.2): State management
+- `http` (^1.2.2): HTTP istekleri
+- `intl` (^0.19.0): Tarih/saat formatlaması
 
-Sürümler için `pubspec.yaml` ve `pubspec.lock` dosyalarına bakabilirsiniz.
+### Proje Yapısı
+```
+lib/
+├── app.dart                    # Ana uygulama widget'ı
+├── main.dart                   # Uygulama giriş noktası
+├── core/                       # Temel sınıflar
+│   ├── error/                  # Hata yönetimi
+│   └── utils/                  # Yardımcı fonksiyonlar
+├── data/                       # Veri katmanı
+│   ├── models/                 # Veri modelleri
+│   ├── repositories/           # Repository sınıfları
+│   └── services/               # Servis sınıfları
+├── di/                         # Dependency injection
+├── presentation/               # UI katmanı
+│   ├── story_creator/          # Hikaye oluşturma sayfası
+│   └── story_reader/           # Hikaye okuma sayfası
+```
 
-## Mimari Notları
-
+### API Anahtarı Yönetimi
 - Model oluşturma: `GenerativeModel(model: 'gemini-1.5-flash', apiKey: ...)`
-- Anahtar yükleme sırası özetle:
-  - (Varsa) Uygulama içindeki güvenli depodan oku
-  - (Yoksa) Derleme zamanı `GEMINI_API_KEY`
-  - (Yoksa) Derleme zamanı `GEMINI_KEY_URL` üzerinden uzaktan getir
+- Anahtar yükleme sırası:
+  1. Uygulama içindeki güvenli depodan oku
+  2. Derleme zamanı `GEMINI_API_KEY` değişkeni
+  3. Derleme zamanı `GEMINI_KEY_URL` üzerinden uzaktan getir
 
-Bu akış ve detaylar `lib/main.dart` içinde uygulanmıştır.
+## Kullanım
+
+### Hikaye Oluşturma
+1. Uygulamayı başlatın
+2. API anahtarınızı ayarlayın (sağ üstteki anahtar simgesi)
+3. Bir karakter seçin (Ninja, Büyücü, Mek Pilotu, vb.)
+4. Bir mekan ve zaman seçin (Tokyo 2024, Akademi, vb.)
+5. Bir olay türü seçin (Güç Keşfi, Aşk Hikayesi, vb.)
+6. "Uzun Hikaye Oluştur" butonuna tıklayın
+7. AI'ın hikayeyi oluşturmasını bekleyin
+
+### Hikaye Okuma
+1. Oluşturulan hikayeyi "Kitap Gibi Oku" butonu ile açın
+2. Sayfa geçişleri için kaydırma yapın
+3. Yazı boyutunu ayarlayın (sağ üstteki butonlar)
+4. Bölüm göstergesini takip edin
 
 ## Sorun Giderme
 
-- "API anahtarı bulunamadı" uyarısı: Sağ üstten anahtar girin ya da `--dart-define` kullanın.
-- "Geçersiz anahtar" hatası: Anahtarınızı Google AI Studio’dan yeniden kopyalayın ve boşluk/kaçak karakter olmadığından emin olun.
-- "Kota aşıldı" hatası: Bir süre bekleyip tekrar deneyin; model/istek sıklığını gözden geçirin.
-- iOS’ta ilk derlemede daha uzun sürebilir (Pods). Gerekirse: `cd ios && pod repo update && pod install`.
+### API Anahtarı Sorunları
+- "API anahtarı bulunamadı" uyarısı: Sağ üstten anahtar girin ya da `--dart-define` kullanın
+- "Geçersiz anahtar" hatası: Anahtarınızı Google AI Studio'dan yeniden kopyalayın
+- "Kota aşıldı" hatası: Bir süre bekleyip tekrar deneyin
+
+### Derleme Sorunları
+- iOS'ta ilk derlemede daha uzun sürebilir (Pods)
+- Gerekirse: `cd ios && pod repo update && pod install`
+- Flutter sürümünüzün güncel olduğundan emin olun
+
+### Hikaye Oluşturma Sorunları
+- Tüm seçimlerin (karakter, mekan, olay) yapıldığından emin olun
+- İnternet bağlantınızın aktif olduğunu kontrol edin
+- API anahtarınızın geçerli olduğunu doğrulayın
 
 ## Güvenlik Tavsiyeleri
 
-- Üretimde API anahtarını istemciye gömmeyin. `GEMINI_KEY_URL` ile korumalı bir endpoint üzerinden anahtar döndürmeyi veya yetkisiz kullanımı engelleyen bir backend proxy yaklaşımını tercih edin.
-- Anahtarı uygulama içinden giriyorsanız, cihaz paylaşımını ve yedeklemeyi göz önünde bulundurun.
+- Üretimde API anahtarını istemciye gömmeyin
+- `GEMINI_KEY_URL` ile korumalı endpoint kullanın
+- Anahtarı uygulama içinden giriyorsanız, cihaz paylaşımını göz önünde bulundurun
+- API anahtarınızı düzenli olarak yenileyin
+
+## Katkıda Bulunma
+
+Bu proje eğitim amaçlıdır. Katkıda bulunmak için:
+1. Fork yapın
+2. Feature branch oluşturun
+3. Değişikliklerinizi commit edin
+4. Pull request gönderin
 
 ## Lisans
 
