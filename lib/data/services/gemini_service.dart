@@ -19,9 +19,11 @@ class GeminiService {
         print('Model: $m');
         print('Prompt uzunluğu: ${prompt.length} karakter');
 
-        final GenerativeModel model = GenerativeModel(model: m, apiKey: apiKey);
-        final List<Content> content = [Content.text(prompt)];
-        final GenerateContentResponse response = await model.generateContent(content);
+          final model = GenerativeModel(
+          apiKey: apiKey,
+          model: m,
+        );
+        final response = await model.generateContent([Content.text(prompt)]);
         print('API yanıtı alındı: ${response.text?.length ?? 0} karakter');
         return response;
       } catch (e) {
