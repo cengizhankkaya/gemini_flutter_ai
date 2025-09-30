@@ -1,3 +1,13 @@
+⚠️ Önemli Not – google_generative_ai Paketinin Durumu
+
+google_generative_ai paketi (örn. ^0.4.7) artık deprecated (kullanımdan kaldırıldı) ve Google tarafından güncellenmeyecek.
+Bunun yerine Firebase AI SDK üzerinden Gemini, Veo, Imagen gibi modellerin tek bir birleşik SDK ile kullanılabilmesi sağlanıyor.
+
+👉 Yeni projelerde firebase_ai paketini kullanmanız tavsiye edilir.
+👉 Mevcut kodunuzda google_generative_ai çalışmaya devam edebilir, ancak uzun vadede desteklenmeyecektir.
+
+Kaynak: Google AI Dart SDK (Deprecated)
+
 # Anime Hikaye Oluşturucu
 
 Google Gemini AI ile anime karakterleri, mekanları ve olayları seçerek uzun ve detaylı anime hikayeleri oluşturan çok platformlu Flutter uygulaması.
