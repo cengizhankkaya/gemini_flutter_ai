@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:math';
 import 'package:intl/intl.dart';
+import 'dart:developer' as developer;
 
 // Chat mesaj modeli
 class ChatMessage {
@@ -144,7 +145,7 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
   bool _isGenerating = false;
   int _retryAttempt = 0;
   GeneratedStory? _generatedStory;
-  List<GeneratedStory> _savedStories = [];
+  final List<GeneratedStory> _savedStories = [];
 
   // Derleme zamanı ortam değişkenleri (opsiyonel):
   // flutter run --dart-define=GEMINI_API_KEY=... [--dart-define=GEMINI_KEY_URL=https://...]
@@ -161,18 +162,18 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
 
   Future<void> _initApiKey() async {
     try {
-      print('API anahtarı yükleniyor...');
+      developer.log('API anahtarı yükleniyor...');
       
       // 1) Öncelik: Secure Storage
       String? key = await _storage.readKey();
-      print('Secure Storage\'dan anahtar: ${key != null ? "Mevcut (${key.length} karakter)" : "Bulunamadı"}');
+      developer.log('Secure Storage\'dan anahtar: ${key != null ? "Mevcut (${key.length} karakter)" : "Bulunamadı"}');
 
       // 2) Yoksa: Derleme zamanı GEMINI_API_KEY
       if (key == null || key.isEmpty) {
         if (_envApiKey.isNotEmpty) {
           key = _envApiKey;
           await _storage.writeKey(key);
-          print('Derleme zamanı anahtarı kullanıldı: ${key.length} karakter');
+          developer.log('Derleme zamanı anahtarı kullanıldı: ${key.length} karakter');
         }
       }
 
@@ -182,7 +183,7 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
         if (remoteKey != null && remoteKey.isNotEmpty) {
           key = remoteKey;
           await _storage.writeKey(key);
-          print('Uzaktan anahtar alındı: ${key.length} karakter');
+          developer.log('Uzaktan anahtar alındı: ${key.length} karakter');
         }
       }
 
@@ -191,9 +192,9 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
         _keyLoaded = true;
       });
       
-      print('API anahtarı yükleme tamamlandı: ${key != null ? "Başarılı" : "Başarısız"}');
+      developer.log('API anahtarı yükleme tamamlandı: ${key != null ? "Başarılı" : "Başarısız"}');
     } catch (e) {
-      print('API anahtarı yükleme hatası: $e');
+      developer.log('API anahtarı yükleme hatası: $e');
       setState(() {
         _keyLoaded = true;
       });
@@ -232,7 +233,7 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
             errorString.contains('service temporarily unavailable');
 
         if (!isTransient || attempt >= maxAttempts) {
-          throw e;
+          rethrow;
         }
 
         // Exponential backoff + jitter
@@ -269,13 +270,13 @@ class _StoryCreatorPageState extends State<StoryCreatorPage> {
     });
 
     try {
-      print('Hikaye oluşturma başlıyor...');
-      print('Seçili karakter: ${_selectedCharacter!.name}');
-      print('Seçili mekan: ${_selectedSetting!.location}');
-      print('Seçili olay: ${_selectedEvent!.title}');
+      developer.log('Hikaye oluşturma başlıyor...');
+      developer.log('Seçili karakter: ${_selectedCharacter!.name}');
+      developer.log('Seçili mekan: ${_selectedSetting!.location}');
+      developer.log('Seçili olay: ${_selectedEvent!.title}');
       
       final storyContent = await _retryWithBackoff(() async {
-        print('Gemini API\'ye istek gönderiliyor...');
+        developer.log('Gemini API\'ye istek gönderiliyor...');
         final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey!);
         
         final prompt = '''
@@ -324,7 +325,7 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
 
         final content = [Content.text(prompt)];
         final response = await model.generateContent(content);
-        print('API yanıtı alındı: ${response.text?.length ?? 0} karakter');
+        developer.log('API yanıtı alındı: ${response.text?.length ?? 0} karakter');
         return response;
       });
 
@@ -337,8 +338,8 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
         createdAt: DateTime.now(),
       );
 
-      print('Hikaye başarıyla oluşturuldu: ${story.title}');
-      print('Hikaye içeriği: ${story.content.length} karakter');
+      developer.log('Hikaye başarıyla oluşturuldu: ${story.title}');
+      developer.log('Hikaye içeriği: ${story.content.length} karakter');
 
       setState(() {
         _generatedStory = story;
@@ -347,8 +348,8 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
       String errorMessage = 'Hata: $e';
       
       // Debug bilgisi için konsola yazdır
-      print('Hikaye oluşturma hatası: $e');
-      print('API Key durumu: ${_apiKey != null ? "Mevcut (${_apiKey!.length} karakter)" : "Bulunamadı"}');
+      developer.log('Hikaye oluşturma hatası: $e');
+      developer.log('API Key durumu: ${_apiKey != null ? "Mevcut (${_apiKey!.length} karakter)" : "Bulunamadı"}');
       
       final errorString = e.toString().toLowerCase();
       if (errorString.contains('503')) {
@@ -644,7 +645,7 @@ Sadece hikayeyi üret. Ek açıklama veya madde imleri ekleme. Markdown kullanma
                   description,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.7),
+                    color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -1158,7 +1159,7 @@ class _StoryReaderPageState extends State<StoryReaderPage> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
+                              color: Colors.black.withValues(alpha: 0.06),
                               blurRadius: 18,
                               offset: const Offset(0, 6),
                             ),
@@ -1207,7 +1208,7 @@ class _StoryReaderPageState extends State<StoryReaderPage> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
+                    color: Colors.black.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
